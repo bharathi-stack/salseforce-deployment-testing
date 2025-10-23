@@ -19,12 +19,13 @@ jobs:
       
       - name: Authenticate to Prod Org
         run: |
-          sf org login web --client-id ${{ secrets.SF_CONSUMER_KEY }} \
-            --client-secret ${{ secrets.SF_CONSUMER_SECRET }} \
+          sf org login web --client-id 3MVG97L7PWbPq6UzT7YBOMxUNgKYQM.UQHHhsDlX.wK8AOnj0PrqRZqrA0Qt7g0CHrFSFMToN9vSEgsM_nlAp \
+            --client-secret 26938DECCB3B73433D227BD4E6BB44CEBDFBAE225732E04CFBF83A970FF21835 \
             --refresh-token ${{ secrets.SF_REFRESH_TOKEN }} \
             --instance-url ${{ secrets.SF_INSTANCE_URL }} \
             --username ${{ secrets.SF_USERNAME }} \
             --alias ProdOrg
+
             
       - name: Deploy to Prod
         run: |
