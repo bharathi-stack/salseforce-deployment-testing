@@ -1,0 +1,27 @@
+name: Deploy to Prod
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Install Salesforce CLI
+        run: |
+          npm install -g @salesforce/cli
+      
+      - name: Authenticate to Prod Org
+        run: |
+          echo "${{ secrets.SF_REFRESH_TOKEN }}" > refresh_token.txt
+          sf org login jwt --client-id ${{ secrets.SF_CONSUMER_KEY }} --jwt-key-file refresh_token.txt --username bramachandiran106@agentforce.com --instance-url ${{ secrets.SF_INSTANCE_URL }} --alias ProdOrg
+      
+      - name: Deploy to Prod
+        run: |
+          sf project deploy start --target-org ProdOrg --source-dir force-app
