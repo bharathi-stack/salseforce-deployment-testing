@@ -19,14 +19,10 @@ jobs:
       
       - name: Authenticate to Prod Org
         run: |
-          sf org login web --client-id 3MVG97L7PWbPq6UzT7YBOMxUNgKYQM.UQHHhsDlX.wK8AOnj0PrqRZqrA0Qt7g0CHrFSFMToN9vSEgsM_nlAp \
-            --client-secret 26938DECCB3B73433D227BD4E6BB44CEBDFBAE225732E04CFBF83A970FF21835 \
-            --refresh-token ${{ secrets.SF_REFRESH_TOKEN }} \
-            --instance-url ${{ secrets.SF_INSTANCE_URL }} \
-            --username ${{ secrets.SF_USERNAME }} \
+          sf org login access-token --instance-url https://orgfarm-a3747e72e3-dev-ed.develop.my.salesforce.com \
+            --access-token 5Aep8618MtpGySpPxj6LWUeF_ypWht8yJB0drnqHGoA_buiDn0LI_nGpoby1zhJJpFBvs0WVu33C8G7BofCsrDy \
             --alias ProdOrg
 
-            
       - name: Deploy to Prod
         run: |
           sf project deploy start --target-org ProdOrg --source-dir force-app
