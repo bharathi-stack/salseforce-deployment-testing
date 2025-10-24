@@ -19,10 +19,9 @@ jobs:
       
       - name: Authenticate to Prod Org
         run: |
-          sf org login access-token --instance-url https://orgfarm-a3747e72e3-dev-ed.develop.my.salesforce.com \
-            --access-token 5Aep8618MtpGySpPxj6LWUeF_ypWht8yJB0drnqHGoA_buiDn0LI_nGpoby1zhJJpFBvs0WVu33C8G7BofCsrDy \
-            --alias ProdOrg
-
+          echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
+          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+      
       - name: Deploy to Prod
         run: |
           sf project deploy start --target-org ProdOrg --source-dir force-app
