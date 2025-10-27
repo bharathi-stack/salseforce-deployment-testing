@@ -64,7 +64,7 @@ jobs:
       - name: Authenticate to Prod Org
         run: |
           # Use the GitHub Secret for your Production org
-          echo "${{ secrets.PROD_SFDX_AUTH_URL }}" > auth_url.txt
+          echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
 
       # 6. Create the delta package
