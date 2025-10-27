@@ -42,8 +42,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          # This is still CRITICAL for git-diff to work
-          fetch-depth: 0 
+          fetch-depth: 0 # CRITICAL for git diff
 
       # 2. Install the MODERN Salesforce CLI (sf)
       - name: Install Salesforce CLI
@@ -58,36 +57,66 @@ jobs:
       # 4. Authenticate to your Prod Org
       - name: Authenticate to Prod Org
         run: |
-          # Use the modern 'sf org login' command
           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
 
-      # 5. Validate Delta against Prod (This replaces all old delta steps)
+      # 5. Find changed metadata files
+      - name: Find changed metadata files
+        id: find_files
+        run: |
+          # Get a list of all changed files between this commit and the one before it
+          git diff --name-only HEAD~1 HEAD > changed-files.txt
+          
+          # Filter this list to include ONLY files inside 'force-app'
+          grep "force-app/" changed-files.txt > salesforce-changes.txt || true
+          
+          echo "--- All changed files ---"
+          cat changed-files.txt
+          echo "-------------------------"
+          
+          echo "--- Salesforce changes ---"
+          cat salesforce-changes.txt
+          echo "--------------------------"
+
+          # Check if the salesforce-changes.txt file is empty or not
+          if [ -s salesforce-changes.txt ]; then
+            echo "Salesforce changes detected."
+            echo "delta_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No Salesforce metadata changes detected. Skipping deployment."
+            echo "delta_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # 6. Create delta package directory
+      - name: Create delta package
+        if: steps.find_files.outputs.delta_exists == 'true'
+        run: |
+          # Create a new directory to hold our delta package
+          mkdir -p delta-package
+          
+          # Copy ONLY the changed Salesforce files into the new directory,
+          # preserving the directory structure (e.g., force-app/main/...)
+          rsync -a --files-from=salesforce-changes.txt . delta-package/
+          
+          echo "--- Delta package contents ---"
+          ls -R delta-package
+          echo "------------------------------"
+
+      # 7. Validate Delta against Prod
       - name: Validate Delta against Prod
         id: validate
+        if: steps.find_files.outputs.delta_exists == 'true'
         run: |
-          # This one command does everything:
-          # 1. Finds the diff between HEAD~1 and HEAD
-          # 2. Creates a package from those changes
-          # 3. Validates that package against Prod
-          #
-          # We add '|| true' because the command exits with 1 (error)
-          # if no changes are found, and we don't want that to fail the job.
+          # We deploy the 'force-app' directory INSIDE our delta-package
+          # We add '|| true' because this command can exit 1 on warnings
           VALIDATE_JSON=$(sf project deploy validate \
-            --git-diff "HEAD~1 HEAD" \
+            --source-dir delta-package/force-app \
             --test-level RunLocalTests \
             --target-org ProdOrg \
             --json) || true
-          
+            
           echo "VALIDATE_JSON: $VALIDATE_JSON"
 
-          # Check if VALIDATE_JSON is empty (which means no changes were found)
-          if [ -z "$VALIDATE_JSON" ]; then
-            echo "No Salesforce metadata changes detected. Skipping deployment."
-            echo "job-id=" >> $GITHUB_OUTPUT
-            exit 0 # Exit step successfully
-          fi
-          
           # Check for a 'status: 0' (success)
           STATUS=$(echo $VALIDATE_JSON | jq -r .status)
           if [ "$STATUS" != "0" ]; then
@@ -101,10 +130,9 @@ jobs:
           echo "Validation successful. Job ID: $JOB_ID"
           echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
 
-      # 6. Deploy Quick (using the Validation ID)
+      # 8. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
-        # This only runs if the 'validate' step produced a job-id
-        if: steps.validate.outputs.job-id
+        if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
         run: |
           echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
           sf project deploy quick --job-id ${{ steps.validate.outputs.job-id }} --target-org ProdOrg
