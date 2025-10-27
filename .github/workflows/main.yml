@@ -27,8 +27,6 @@
 #           sf project deploy start --target-org ProdOrg --source-dir force-app
 
 
-
-
 name: Deploy Delta to Prod
 
 on:
@@ -44,63 +42,147 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Need full history for delta comparison
+          # This is still CRITICAL for git-diff to work
+          fetch-depth: 0 
 
-      # 2. Install the CLASSIC Salesforce CLI (sfdx)
+      # 2. Install the MODERN Salesforce CLI (sf)
       - name: Install Salesforce CLI
         run: |
-          # We are installing the classic sfdx-cli, NOT @salesforce/cli
-          npm install -g sfdx-cli
+          npm install -g @salesforce/cli
 
-      # 3. Install the Delta plugin
-      - name: Install sfdx-git-delta plugin
-        run: |
-          # Use the classic 'sfdx plugins:install' command
-          echo y | sfdx plugins:install sfdx-git-delta
-
-      # 4. Install jq (a tool to parse JSON output)
+      # 3. Install jq (a tool to parse JSON output)
       - name: Install jq
         run: |
           sudo apt-get update && sudo apt-get install -y jq
 
-      # 5. Authenticate to your Prod Org
+      # 4. Authenticate to your Prod Org
       - name: Authenticate to Prod Org
         run: |
-          # Use the classic 'sfdx force:auth:sfdxurl:store' command
+          # Use the modern 'sf org login' command
           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
-          sfdx force:auth:sfdxurl:store -f auth_url.txt -a ProdOrg
+          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
 
-      # 6. Create the delta package
-      - name: Generate delta package
-        run: |
-          # This command will now work because we are using sfdx-cli
-          sfdx git:delta --from HEAD~1 --to HEAD --output delta-package --src force-app
-
-      # 6.5. Check if delta-package was created
-      - name: Check for delta changes
-        id: check_delta
-        run: |
-          if [ -d "delta-package" ]; then
-            echo "Delta changes found. Proceeding with deployment."
-            echo "delta_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "No delta changes detected. Skipping deployment."
-            echo "delta_exists=false" >> $GITHUB_OUTPUT
-          fi
-
-
-      # 7. Validate Delta against Prod (Best Practice)
+      # 5. Validate Delta against Prod (This replaces all old delta steps)
       - name: Validate Delta against Prod
         id: validate
-        if: steps.check_delta.outputs.delta_exists == 'true'  # <-- ADD THIS LINE
         run: |
-          # ... (rest of your step stays the same)
-          VALIDATE_JSON=$(sfdx force:mdapi:deploy --deploydir delta-package --testlevel RunLocalTests --targetusername ProdOrg --checkonly --json)
-          # ...
+          # This one command does everything:
+          # 1. Finds the diff between HEAD~1 and HEAD
+          # 2. Creates a package from those changes
+          # 3. Validates that package against Prod
+          #
+          # We add '|| true' because the command exits with 1 (error)
+          # if no changes are found, and we don't want that to fail the job.
+          VALIDATE_JSON=$(sf project deploy validate \
+            --git-diff "HEAD~1 HEAD" \
+            --test-level RunLocalTests \
+            --target-org ProdOrg \
+            --json) || true
+          
+          echo "VALIDATE_JSON: $VALIDATE_JSON"
 
-      # 8. Deploy Quick (using the Validation ID)
+          # Check if VALIDATE_JSON is empty (which means no changes were found)
+          if [ -z "$VALIDATE_JSON" ]; then
+            echo "No Salesforce metadata changes detected. Skipping deployment."
+            echo "job-id=" >> $GITHUB_OUTPUT
+            exit 0 # Exit step successfully
+          fi
+          
+          # Check for a 'status: 0' (success)
+          STATUS=$(echo $VALIDATE_JSON | jq -r .status)
+          if [ "$STATUS" != "0" ]; then
+            echo "Validation failed! Response: $VALIDATE_JSON"
+            exit 1 # Fail the job
+          fi
+
+          # Parse the 'id' (the Job ID) from the JSON output
+          JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
+          
+          echo "Validation successful. Job ID: $JOB_ID"
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+
+      # 6. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
-        # We need both conditions to be true to run this step
-        if: steps.validate.outputs.job-id && steps.check_delta.outputs.delta_exists == 'true'  # <-- UPDATE THIS LINE
+        # This only runs if the 'validate' step produced a job-id
+        if: steps.validate.outputs.job-id
         run: |
-          # ... (rest of your step stays the same)
+          echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
+          sf project deploy quick --job-id ${{ steps.validate.outputs.job-id }} --target-org ProdOrg
+
+
+
+# name: Deploy Delta to Prod
+
+# on:
+#   push:
+#     branches:
+#       - main  # Triggers only on push to the 'main' branch
+
+# jobs:
+#   deploy-prod:
+#     runs-on: ubuntu-latest
+#     steps:
+#       # 1. Check out the repository code
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+#         with:
+#           fetch-depth: 0 # Need full history for delta comparison
+
+#       # 2. Install the CLASSIC Salesforce CLI (sfdx)
+#       - name: Install Salesforce CLI
+#         run: |
+#           # We are installing the classic sfdx-cli, NOT @salesforce/cli
+#           npm install -g sfdx-cli
+
+#       # 3. Install the Delta plugin
+#       - name: Install sfdx-git-delta plugin
+#         run: |
+#           # Use the classic 'sfdx plugins:install' command
+#           echo y | sfdx plugins:install sfdx-git-delta
+
+#       # 4. Install jq (a tool to parse JSON output)
+#       - name: Install jq
+#         run: |
+#           sudo apt-get update && sudo apt-get install -y jq
+
+#       # 5. Authenticate to your Prod Org
+#       - name: Authenticate to Prod Org
+#         run: |
+#           # Use the classic 'sfdx force:auth:sfdxurl:store' command
+#           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
+#           sfdx force:auth:sfdxurl:store -f auth_url.txt -a ProdOrg
+
+#       # 6. Create the delta package
+#       - name: Generate delta package
+#         run: |
+#           # This command will now work because we are using sfdx-cli
+#           sfdx git:delta --from HEAD~1 --to HEAD --output delta-package --src force-app
+
+#       # 6.5. Check if delta-package was created
+#       - name: Check for delta changes
+#         id: check_delta
+#         run: |
+#           if [ -d "delta-package" ]; then
+#             echo "Delta changes found. Proceeding with deployment."
+#             echo "delta_exists=true" >> $GITHUB_OUTPUT
+#           else
+#             echo "No delta changes detected. Skipping deployment."
+#             echo "delta_exists=false" >> $GITHUB_OUTPUT
+#           fi
+
+
+#       # 7. Validate Delta against Prod (Best Practice)
+#       - name: Validate Delta against Prod
+#         id: validate
+#         if: steps.check_delta.outputs.delta_exists == 'true'  # <-- ADD THIS LINE
+#         run: |
+#           # ... (rest of your step stays the same)
+#           VALIDATE_JSON=$(sfdx force:mdapi:deploy --deploydir delta-package --testlevel RunLocalTests --targetusername ProdOrg --checkonly --json)
+#           # ...
+
+#       # 8. Deploy Quick (using the Validation ID)
+#       - name: Deploy Quick (using Validation ID)
+#         # We need both conditions to be true to run this step
+#         if: steps.validate.outputs.job-id && steps.check_delta.outputs.delta_exists == 'true'  # <-- UPDATE THIS LINE
+#         run: |
+#           # ... (rest of your step stays the same)
