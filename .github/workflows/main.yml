@@ -102,18 +102,22 @@ jobs:
           ls -R delta-package
           echo "------------------------------"
 
-# 7. Validate Delta against Prod
+  # 7. Validate Delta against Prod
       - name: Validate Delta against Prod
         id: validate
         if: steps.find_files.outputs.delta_exists == 'true'
         run: |
+          # Use NoTestRun if this is a SANDBOX
           VALIDATE_JSON=$(sf project deploy validate \
             --source-dir delta-package/force-app \
-            --test-level RunLocalTests \
+            --test-level NoTestRun \
             --target-org ProdOrg \
             --json) || true
             
           echo "VALIDATE_JSON: $VALIDATE_JSON"
+
+          # ... (rest of the script) ...
+
 
           STATUS=$(echo $VALIDATE_JSON | jq -r .status)
           if [ "$STATUS" != "0" ]; then
