@@ -162,4 +162,5 @@
     <searchLayouts></searchLayouts>
     <sharingModel>ReadWrite</sharingModel>
     <visibility>Public</visibility>
+    <description>Forcing a redeploy.</description>
 </CustomObject>
