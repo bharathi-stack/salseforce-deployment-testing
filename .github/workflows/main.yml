@@ -76,24 +76,31 @@ jobs:
           # This command will now work because we are using sfdx-cli
           sfdx git:delta --from HEAD~1 --to HEAD --output delta-package
 
+      # 6.5. Check if delta-package was created
+      - name: Check for delta changes
+        id: check_delta
+        run: |
+          if [ -d "delta-package" ]; then
+            echo "Delta changes found. Proceeding with deployment."
+            echo "delta_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No delta changes detected. Skipping deployment."
+            echo "delta_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+
       # 7. Validate Delta against Prod (Best Practice)
       - name: Validate Delta against Prod
-        id: validate # We give this step an 'id' to reference its output
+        id: validate
+        if: steps.check_delta.outputs.delta_exists == 'true'  # <-- ADD THIS LINE
         run: |
-          # Use the classic 'sfdx force:mdapi:deploy' command with --checkonly
+          # ... (rest of your step stays the same)
           VALIDATE_JSON=$(sfdx force:mdapi:deploy --deploydir delta-package --testlevel RunLocalTests --targetusername ProdOrg --checkonly --json)
-          
-          echo "VALIDATE_JSON: $VALIDATE_JSON"
-          
-          # Parse the 'id' (the Job ID) from the JSON output
-          JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
-          
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+          # ...
 
       # 8. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
-        if: steps.validate.outputs.job-id
+        # We need both conditions to be true to run this step
+        if: steps.validate.outputs.job-id && steps.check_delta.outputs.delta_exists == 'true'  # <-- UPDATE THIS LINE
         run: |
-          echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
-          # Use the classic 'sfdx force:mdapi:deploy:quick' command
-          sfdx force:mdapi:deploy:quick --jobid ${{ steps.validate.outputs.job-id }} --targetusername ProdOrg
+          # ... (rest of your step stays the same)
