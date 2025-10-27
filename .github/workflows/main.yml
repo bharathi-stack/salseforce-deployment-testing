@@ -1,27 +1,97 @@
-name: Deploy to Prod
+# name: Deploy to Prod
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+      
+#       - name: Install Salesforce CLI
+#         run: |
+#           npm install -g @salesforce/cli
+      
+#       - name: Authenticate to Prod Org
+#         run: |
+#           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
+#           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+      
+#       - name: Deploy to Prod
+#         run: |
+#           sf project deploy start --target-org ProdOrg --source-dir force-app
+
+
+
+name: Deploy Delta to Prod
 
 on:
   push:
     branches:
-      - main
+      - main  # Triggers only on push to the 'main' branch
 
 jobs:
-  deploy:
+  deploy-prod:
     runs-on: ubuntu-latest
-    
     steps:
+      # 1. Check out the repository code
       - name: Checkout code
         uses: actions/checkout@v3
-      
+        with:
+          fetch-depth: 0 # Need full history for delta comparison
+
+      # 2. Install the Salesforce CLI
       - name: Install Salesforce CLI
         run: |
           npm install -g @salesforce/cli
-      
+
+      # 3. Install the Delta plugin
+      - name: Install sf-git-delta plugin
+        run: |
+          echo y | sf plugins install sf-git-delta
+          
+      # 4. Install jq (a tool to parse JSON output)
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
+      # 5. Authenticate to your Prod Org
       - name: Authenticate to Prod Org
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
+          # Use the GitHub Secret for your Production org
+          echo "${{ secrets.PROD_SFDX_AUTH_URL }}" > auth_url.txt
           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
-      
-      - name: Deploy to Prod
+
+      # 6. Create the delta package
+      - name: Generate delta package
         run: |
-          sf project deploy start --target-org ProdOrg --source-dir force-app
+          sf git delta --from HEAD~1 --to HEAD --output delta-package
+          
+      # 7. Validate Delta against Prod (Best Practice)
+      - name: Validate Delta against Prod
+        id: validate # We give this step an 'id' to reference its output
+        run: |
+          # Run validation, store the JSON output in a variable
+          VALIDATE_JSON=$(sf project deploy validate --source-dir delta-package --test-level RunLocalTests --target-org ProdOrg --json)
+          
+          # Print the JSON for debugging
+          echo "VALIDATE_JSON: $VALIDATE_JSON"
+          
+          # Parse the 'id' (the Job ID) from the JSON output
+          JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
+          
+          # Pass the Job ID to the next step
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+
+      # 8. Deploy Quick (using the Validation ID)
+      - name: Deploy Quick (using Validation ID)
+        # This step only runs if the 'validate' step successfully produced a job-id
+        if: steps.validate.outputs.job-id
+        run: |
+          echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
+          sf project deploy quick --job-id ${{ steps.validate.outputs.job-id }} --target-org ProdOrg
