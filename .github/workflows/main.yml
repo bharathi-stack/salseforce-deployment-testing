@@ -112,10 +112,9 @@ jobs:
           VALIDATE_JSON=$(sf project deploy validate \
             --source-dir delta-package/force-app \
             --test-level RunLocalTests \
-            --test-level NoTestRun \
             --target-org ProdOrg \
             --json) || true
-            
+
           echo "VALIDATE_JSON: $VALIDATE_JSON"
 
           # Check for a 'status: 0' (success)
