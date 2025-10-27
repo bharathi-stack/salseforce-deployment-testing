@@ -53,8 +53,8 @@ jobs:
       # 3. Install the Delta plugin
       - name: Install sf-git-delta plugin
         run: |
-          echo y | sf plugins install sf-git-delta
-          
+          echo y | sf plugins install sfdx-git-delta
+
       # 4. Install jq (a tool to parse JSON output)
       - name: Install jq
         run: |
