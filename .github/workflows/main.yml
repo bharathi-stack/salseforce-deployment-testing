@@ -70,7 +70,7 @@ jobs:
       # 6. Create the delta package
       - name: Generate delta package
         run: |
-          sfdx git:delta --from HEAD~1 --to HEAD --output delta-package
+          sf sfdx git:delta --from HEAD~1 --to HEAD --output delta-package
 
       # 7. Validate Delta against Prod (Best Practice)
       - name: Validate Delta against Prod
