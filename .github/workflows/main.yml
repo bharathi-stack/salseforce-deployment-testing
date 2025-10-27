@@ -28,6 +28,7 @@
 
 
 
+
 name: Deploy Delta to Prod
 
 on:
@@ -45,15 +46,17 @@ jobs:
         with:
           fetch-depth: 0 # Need full history for delta comparison
 
-      # 2. Install the Salesforce CLI
+      # 2. Install the CLASSIC Salesforce CLI (sfdx)
       - name: Install Salesforce CLI
         run: |
-          npm install -g @salesforce/cli
+          # We are installing the classic sfdx-cli, NOT @salesforce/cli
+          npm install -g sfdx-cli
 
       # 3. Install the Delta plugin
-      - name: Install sf-git-delta plugin
+      - name: Install sfdx-git-delta plugin
         run: |
-          echo y | sf plugins install sfdx-git-delta
+          # Use the classic 'sfdx plugins:install' command
+          echo y | sfdx plugins:install sfdx-git-delta
 
       # 4. Install jq (a tool to parse JSON output)
       - name: Install jq
@@ -63,35 +66,34 @@ jobs:
       # 5. Authenticate to your Prod Org
       - name: Authenticate to Prod Org
         run: |
-          # Use the GitHub Secret for your Production org
+          # Use the classic 'sfdx force:auth:sfdxurl:store' command
           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
-          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+          sfdx force:auth:sfdxurl:store -f auth_url.txt -a ProdOrg
 
       # 6. Create the delta package
       - name: Generate delta package
         run: |
-          sf sfdx git:delta --from HEAD~1 --to HEAD --output delta-package
+          # This command will now work because we are using sfdx-cli
+          sfdx git:delta --from HEAD~1 --to HEAD --output delta-package
 
       # 7. Validate Delta against Prod (Best Practice)
       - name: Validate Delta against Prod
         id: validate # We give this step an 'id' to reference its output
         run: |
-          # Run validation, store the JSON output in a variable
-          VALIDATE_JSON=$(sf project deploy validate --source-dir delta-package --test-level RunLocalTests --target-org ProdOrg --json)
+          # Use the classic 'sfdx force:mdapi:deploy' command with --checkonly
+          VALIDATE_JSON=$(sfdx force:mdapi:deploy --deploydir delta-package --testlevel RunLocalTests --targetusername ProdOrg --checkonly --json)
           
-          # Print the JSON for debugging
           echo "VALIDATE_JSON: $VALIDATE_JSON"
           
           # Parse the 'id' (the Job ID) from the JSON output
           JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
           
-          # Pass the Job ID to the next step
           echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
 
       # 8. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
-        # This step only runs if the 'validate' step successfully produced a job-id
         if: steps.validate.outputs.job-id
         run: |
           echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
-          sf project deploy quick --job-id ${{ steps.validate.outputs.job-id }} --target-org ProdOrg
+          # Use the classic 'sfdx force:mdapi:deploy:quick' command
+          sfdx force:mdapi:deploy:quick --jobid ${{ steps.validate.outputs.job-id }} --targetusername ProdOrg
