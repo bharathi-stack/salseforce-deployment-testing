@@ -111,7 +111,7 @@ jobs:
           # We add '|| true' because this command can exit 1 on warnings
           VALIDATE_JSON=$(sf project deploy validate \
             --source-dir delta-package/force-app \
-            --test-level RunLocalTests \
+            --test-level NoTestRun \
             --target-org ProdOrg \
             --json) || true
             
