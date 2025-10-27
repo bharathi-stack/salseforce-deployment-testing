@@ -9,5 +9,4 @@
     <trackTrending>false</trackTrending>
     <type>Number</type>
     <unique>false</unique>
-    <description>Forcing a redeploy.</description>
 </CustomField>
