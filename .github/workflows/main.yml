@@ -102,40 +102,55 @@ jobs:
           ls -R delta-package
           echo "------------------------------"
 
-      # 7. Validate Delta against Prod
+# 7. Validate Delta against Prod
       - name: Validate Delta against Prod
         id: validate
         if: steps.find_files.outputs.delta_exists == 'true'
         run: |
-          # We deploy the 'force-app' directory INSIDE our delta-package
-          # We add '|| true' because this command can exit 1 on warnings
           VALIDATE_JSON=$(sf project deploy validate \
             --source-dir delta-package/force-app \
             --test-level RunLocalTests \
             --target-org ProdOrg \
             --json) || true
-
+            
           echo "VALIDATE_JSON: $VALIDATE_JSON"
 
-          # Check for a 'status: 0' (success)
           STATUS=$(echo $VALIDATE_JSON | jq -r .status)
           if [ "$STATUS" != "0" ]; then
-            echo "Validation failed! Response: $VALIDATE_JSON"
+            echo "Validation failed to start! Response: $VALIDATE_JSON"
             exit 1 # Fail the job
           fi
-
-          # Parse the 'id' (the Job ID) from the JSON output
-          JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
           
-          echo "Validation successful. Job ID: $JOB_ID"
+          JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
+          echo "Validation started. Job ID: $JOB_ID"
           echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+
+      # ---------------------------------------------------------------
+      #  NEW STEP: Wait for the validation to finish
+      # ---------------------------------------------------------------
+      - name: Wait for Validation to Complete
+        if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
+        run: |
+          echo "Waiting for validation (Job ID: ${{ steps.validate.outputs.job-id }}) to complete..."
+          
+          # This command will wait until the job finishes.
+          # It will exit with an error if the validation itself fails (e.g., test failures).
+          sf project deploy report \
+            --job-id ${{ steps.validate.outputs.job-id }} \
+            --target-org ProdOrg
+            
+          echo "Validation completed successfully."
+      # ---------------------------------------------------------------
 
       # 8. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
+        # This step will now only run if the 'Wait for Validation' step succeeded
         if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
         run: |
           echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
-          sf project deploy quick --job-id ${{ steps.validate.outputs.job-id }} --target-org ProdOrg
+          sf project deploy quick \
+            --job-id ${{ steps.validate.outputs.job-id }} \
+            --target-org ProdOrg
 
 
 
