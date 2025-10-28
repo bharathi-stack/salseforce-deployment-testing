@@ -1,3 +1,4 @@
+# common deployment flow
 # name: Deploy to Prod
 
 # on:
@@ -32,7 +33,7 @@ name: Deploy Delta to Prod
 on:
   push:
     branches:
-      - main  # Triggers only on push to the 'main' branch
+      - main
 
 jobs:
   deploy-prod:
@@ -42,7 +43,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # CRITICAL for git diff
+          fetch-depth: 0
 
       # 2. Install the MODERN Salesforce CLI (sf)
       - name: Install Salesforce CLI
@@ -68,7 +69,7 @@ jobs:
           git diff --name-only HEAD~1 HEAD > changed-files.txt
           
           # Filter this list to include ONLY files inside 'force-app'
-          grep "force-app/" changed-files.txt > salesforce-changes.txt || true
+          grep "force-app/" changed-files.txt > salesforce-changes.txt || true 
           
           echo "--- All changed files ---"
           cat changed-files.txt
@@ -143,7 +144,6 @@ jobs:
 
       # 8. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
-        # This step will now only run if the 'Wait for Validation' step succeeded
         if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
         run: |
           echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
