@@ -132,15 +132,11 @@ jobs:
         if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
         run: |
           echo "Waiting for validation (Job ID: ${{ steps.validate.outputs.job-id }}) to complete..."
-          
-          # This command will wait until the job finishes.
-          # It will exit with an error if the validation itself fails (e.g., test failures).
           sf project deploy report \
             --job-id ${{ steps.validate.outputs.job-id }} \
             --target-org ProdOrg
             
           echo "Validation completed successfully."
-      # ---------------------------------------------------------------
 
       # 8. Deploy Quick (using the Validation ID)
       - name: Deploy Quick (using Validation ID)
