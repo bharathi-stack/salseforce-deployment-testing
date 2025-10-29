@@ -3,7 +3,7 @@ private class MathOperationsTest {
 
     @isTest
     static void testAddFiveAndFive() {
-        // 1. Setup (No setup needed)
+        // 1. Setup (No setup needed).
         
         // 2. Call the method
         Test.startTest();
