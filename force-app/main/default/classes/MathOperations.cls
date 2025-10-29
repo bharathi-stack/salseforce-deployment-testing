@@ -2,7 +2,7 @@ public class MathOperations {
     
     /**
      * @description Adds 5 and 5 together.
-     * @return Integer The sum of 5 + 5.
+     * @return Integer The sum of 5 + 5...
      */
     public static Integer addFiveAndFive() {
         Integer a = 5;

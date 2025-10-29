@@ -3,7 +3,7 @@ private class MathOperationsTest {
 
     @isTest
     static void testAddFiveAndFive() {
-        // 1. Call the method
+        // 1. Call the method..
         Test.startTest();
         Integer actualResult = MathOperations.addFiveAndFive();
         Test.stopTest();
