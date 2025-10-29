@@ -18,7 +18,7 @@ public class MathOperations {
         
         return result;
     }
-    public static Integer subFiveAndFive() {
+    public static Integer mulFiveAndFive() {
         Integer a = 5;
         Integer b = 5;
         Integer result = a * b;
