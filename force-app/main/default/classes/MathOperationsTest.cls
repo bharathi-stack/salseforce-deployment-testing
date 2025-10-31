@@ -21,7 +21,7 @@ private class MathOperationsTest {
         Test.stopTest();
         
         // 2. Verify the result
-        Integer expectedResult = 1;
+        Integer expectedResult = 0;
         System.assertEquals(expectedResult, actualResult, 'The subtract method should have returned 0.');
     }
 
