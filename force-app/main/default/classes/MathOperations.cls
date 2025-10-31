@@ -18,11 +18,11 @@ public class MathOperations {
         
         return result;
     }
-    // public static Integer mulFiveAndFive() {
-    //     Integer a = 5;
-    //     Integer b = 5;
-    //     Integer result = a * b;
+    public static Integer mulFiveAndFive() {
+        Integer a = 5;
+        Integer b = 5;
+        Integer result = a * b;
         
-    //     return result;
-    // }
+        return result;
+    }
 }
