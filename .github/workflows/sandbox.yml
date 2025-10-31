@@ -128,8 +128,9 @@ jobs:
 
 # 7. Wait for the validation to finish
       - name: Wait for Validation to Complete
-        # if: ... (your if condition is fine)
-        # REMOVE continue-on-error: true from this step
+        id: wait_step  # <--- 1. ADD THIS ID
+        if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
+        # Make sure 'continue-on-error: true' is NOT here
         run: |
           echo "Waiting for validation (Job ID: ${{ steps.validate.outputs.job-id }}) to complete..."
           sf project deploy report \
@@ -140,9 +141,9 @@ jobs:
 
 
       # 8. Deploy Quick (using Validation ID)
-      # This step will now ONLY be reached if the "Wait" step above succeeds.
       - name: Deploy Quick (using Validation ID)
-        if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
+        # vvv 2. CHANGE THIS 'IF' CONDITION vvv
+        if: steps.wait_step.outcome == 'success' && steps.find_files.outputs.delta_exists == 'true'
         run: |
           echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
           sf project deploy quick \
