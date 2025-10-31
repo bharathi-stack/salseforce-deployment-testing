@@ -1,0 +1,149 @@
+# # common deployment flowtytt
+# name: Deploy to Prod
+
+# on:
+#   push:
+#     branches:
+#       - prod
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest    
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+      
+#       - name: Install Salesforce CLI
+#         run: |
+#           npm install -g @salesforce/cli
+      
+#       - name: Authenticate to Prod Org
+#         run: |
+#           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
+#           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+      
+#       - name: Deploy to Prod
+#         run: |
+#           sf project deploy start --target-org ProdOrg --source-dir force-app
+
+
+
+
+name: Deploy Delta to Prod
+
+on:
+  push:
+    branches:
+      - prod
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Salesforce CLI
+        run: |
+          npm install -g @salesforce/cli
+
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Authenticate to Prod Org
+        run: |
+          echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
+          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+
+      - name: Find changed metadata files
+        id: find_files
+        run: |
+          # Get a list of all changed files between this commit and the one before it
+          git diff --name-only HEAD~1 HEAD > changed-files.txt
+          
+          # Filter this list to include ONLY files inside 'force-app'
+          grep "force-app/" changed-files.txt > salesforce-changes.txt || true 
+          
+          echo "--- All changed files ---"
+          cat changed-files.txt
+          echo "-------------------------"
+          
+          echo "--- Salesforce changes ---"
+          cat salesforce-changes.txt
+          echo "--------------------------"
+
+          # Check if the salesforce-changes.txt file is empty or not
+          if [ -s salesforce-changes.txt ]; then
+            echo "Salesforce changes detected."
+            echo "delta_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No Salesforce metadata changes detected. Skipping deployment."
+            echo "delta_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # 6. Validate Delta against Prod (NEW VERSION)
+      # This step replaces the old "Create delta package" and "Validate" steps
+      - name: Validate Delta against Prod
+        id: validate
+        if: steps.find_files.outputs.delta_exists == 'true'
+        run: |
+          # Create an empty variable to hold our arguments
+          SOURCE_ARGS=""
+          
+          # Read salesforce-changes.txt line by line
+          # For each file, add it to our arguments list
+          while read -r file_path; do
+            SOURCE_ARGS="$SOURCE_ARGS --source-dir $file_path"
+          done < salesforce-changes.txt
+
+          echo "--- Validating the following files ---"
+          echo $SOURCE_ARGS
+          echo "--------------------------------------"
+          
+          # Run the validate command using the arguments we built
+          # We use "|| true" so the job doesn't fail here if the validation fails
+          # We check the JSON status in the next lines instead
+          VALIDATE_JSON=$(sf project deploy validate \
+            $SOURCE_ARGS \
+            --test-level RunLocalTests \
+            --target-org ProdOrg \
+            --json) || true
+            
+          echo "VALIDATE_JSON: $VALIDATE_JSON"
+          
+          # Check if the command itself failed (e.g., NothingToDeploy error)
+          STATUS=$(echo $VALIDATE_JSON | jq -r .status)
+          if [ "$STATUS" != "0" ]; then
+            echo "Validation failed to start! Response: $VALIDATE_JSON"
+            exit 1 # Fail the job
+          fi
+          
+          # Get the Job ID from the successful start
+          JOB_ID=$(echo $VALIDATE_JSON | jq -r .result.id)
+          echo "Validation started. Job ID: $JOB_ID"
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+
+      # 7. Wait for the validation to finish
+      - name: Wait for Validation to Complete
+        if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
+        run: |
+          echo "Waiting for validation (Job ID: ${{ steps.validate.outputs.job-id }}) to complete..."
+          # This command will wait and report progress. It will exit with an error
+          # if the validation itself fails (e.g., test failures), which is what we want.
+          sf project deploy report \
+            --job-id ${{ steps.validate.outputs.job-id }} \
+            --target-org ProdOrg
+            
+          echo "Validation completed successfully."
+
+
+      - name: Deploy Quick (using Validation ID)
+        if: steps.validate.outputs.job-id && steps.find_files.outputs.delta_exists == 'true'
+        run: |
+          echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
+          sf project deploy quick \
+            --job-id ${{ steps.validate.outputs.job-id }} \
+            --target-org ProdOrg
