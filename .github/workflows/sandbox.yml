@@ -56,7 +56,7 @@ jobs:
       - name: Authenticate to sandbox Org
         run: |
           echo "${{ secrets.SSFDX_AUTH_URL }}" > auth_url.txt
-          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias sanboxOrg
+          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias sandboxOrg 
 
       - name: Find changed metadata files
         id: find_files
