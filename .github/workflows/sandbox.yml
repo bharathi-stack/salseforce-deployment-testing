@@ -1,5 +1,5 @@
 # # common deployment flowtytt
-# name: Deploy to Prod
+# name: Deploy to sandbox
 
 # on:
 #   push:
@@ -17,19 +17,19 @@
 #         run: |
 #           npm install -g @salesforce/cli
       
-#       - name: Authenticate to Prod Org
+#       - name: Authenticate to sandbox Org
 #         run: |
-#           echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
-#           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+#           echo "${{ secrets.SSFDX_AUTH_URL }}" > auth_url.txt
+#           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias sandboxOrg
       
-#       - name: Deploy to Prod
+#       - name: Deploy to sandbox
 #         run: |
-#           sf project deploy start --target-org ProdOrg --source-dir force-app
+#           sf project deploy start --target-org sandboxOrg --source-dir force-app
 
 
 
 
-name: Deploy Delta to Prod
+name: Deploy Delta to sandbox
 
 on:
   push:
@@ -37,7 +37,7 @@ on:
       - sandbox
 
 jobs:
-  deploy-prod:
+  deploy-sandbox:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -53,10 +53,10 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Authenticate to Prod Org
+      - name: Authenticate to sandbox Org
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth_url.txt
-          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias ProdOrg
+          echo "${{ secrets.SSFDX_AUTH_URL }}" > auth_url.txt
+          sf org login sfdx-url --sfdx-url-file auth_url.txt --alias sanboxOrg
 
       - name: Find changed metadata files
         id: find_files
@@ -84,9 +84,9 @@ jobs:
             echo "delta_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # 6. Validate Delta against Prod (NEW VERSION)
+      # 6. Validate Delta against sandbox (NEW VERSION)
       # This step replaces the old "Create delta package" and "Validate" steps
-      - name: Validate Delta against Prod
+      - name: Validate Delta against sandbox
         id: validate
         if: steps.find_files.outputs.delta_exists == 'true'
         run: |
@@ -109,7 +109,7 @@ jobs:
           VALIDATE_JSON=$(sf project deploy validate \
             $SOURCE_ARGS \
             --test-level RunLocalTests \
-            --target-org ProdOrg \
+            --target-org sandboxOrg \
             --json) || true
             
           echo "VALIDATE_JSON: $VALIDATE_JSON"
@@ -135,7 +135,7 @@ jobs:
           # if the validation itself fails (e.g., test failures), which is what we want.
           sf project deploy report \
             --job-id ${{ steps.validate.outputs.job-id }} \
-            --target-org ProdOrg
+            --target-org sandboxOrg
             
           echo "Validation completed successfully."
 
@@ -146,4 +146,4 @@ jobs:
           echo "Deploying using Validation Job ID: ${{ steps.validate.outputs.job-id }}"
           sf project deploy quick \
             --job-id ${{ steps.validate.outputs.job-id }} \
-            --target-org ProdOrg
+            --target-org sandboxOrg
