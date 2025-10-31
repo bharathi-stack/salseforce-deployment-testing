@@ -53,7 +53,6 @@ jobs:
       - name: Authenticate to sandbox Org
         run: |
           echo "${{ secrets.SSFDX_AUTH_URL }}" > auth_url.txt
-          # We still set-default, as it's good practice
           sf org login sfdx-url --sfdx-url-file auth_url.txt --alias sandboxOrg --set-default
 
       - name: Find changed metadata files
@@ -95,7 +94,7 @@ jobs:
           VALIDATE_JSON=$(sf project deploy validate \
             $SOURCE_ARGS \
             --test-level RunLocalTests \
-            --target-org sandboxOrg \ # <--- CHANGE 1: ADDED THIS BACK
+            --target-org sandboxOrg \
             --json) || true
             
           echo "VALIDATE_JSON: $VALIDATE_JSON"
@@ -117,7 +116,7 @@ jobs:
           echo "Waiting for validation (Job ID: ${{ steps.validate.outputs.job-id }}) to complete..."
           sf project deploy report \
             --job-id ${{ steps.validate.outputs.job-id }} \
-            --target-org sandboxOrg # <--- CHANGE 2: ADDED THIS BACK
+            --target-org sandboxOrg
             
           echo "Validation completed successfully."
 
@@ -127,7 +126,7 @@ jobs:
           echo "Deploying using Validation ID: ${{ steps.validate.outputs.job-id }}"
           sf project deploy quick \
             --job-id ${{ steps.validate.outputs.job-id }} \
-            --target-org sandboxOrg # <--- CHANGE 3: ADDED THIS BACK
+            --target-org sandboxOrg
 
 
 # name: Deploy Delta to sandbox
